@@ -85,9 +85,9 @@ def slope_threshold(v, i1, i2, threshold=0.093, dx=1):
             return True
     return False
 
-def filter_peaks(v_y, v_max, v_min, threshold_slope=0.093, threshold_time=2, dx=1):
+def filter_peaks(v_y, v_min, v_max, threshold_slope=0.093, threshold_time=2, dx=1):
     '''
-    v is entire array of data; v_max and v_min are list of indices of max peak and min peak respectively; threshold is cutoff for the first order derivative for required peaks
+    v_y is entire array of data; v_max and v_min are list of indices of max peak and min peak respectively; threshold is cutoff for the first order derivative for required peaks
     '''
     filtered_v_max, filtered_v_min = [], []
     for i1, i2 in zip(v_min, v_max):
@@ -95,7 +95,7 @@ def filter_peaks(v_y, v_max, v_min, threshold_slope=0.093, threshold_time=2, dx=
         if slope_threshold(v_y, i1, i2, threshold_slope, dx):
             filtered_v_min.append(i1)
             filtered_v_max.append(i2)
-    return filtered_v_max, filtered_v_min
+    # return filtered_v_max, filtered_v_min
     v_max, v_min = filtered_v_max, filtered_v_min
     v_len = len(v_max)
     if not v_len:
@@ -103,10 +103,57 @@ def filter_peaks(v_y, v_max, v_min, threshold_slope=0.093, threshold_time=2, dx=
     filtered_v_max, filtered_v_min = [v_max[0]], [v_min[0]]
     for i in range(1, v_len):
         # Proximity based filtering - threshold 2 second(0.5 Hz)
-        if v_max[i] - filtered_v_max[-1] > threshold_time/dx and v_min[i] :
-            filtered_v_min.append(i1)
-            filtered_v_max.append(i2)
+        if v_min[i] - filtered_v_max[-1] > threshold_time/dx:# and v_min[i] - filtered_v_min[-1] > threshold_time/dx:
+            filtered_v_min.append(v_min[i])
+            filtered_v_max.append(v_max[i])
+        elif v_y[filtered_v_max[-1]] < v_y[v_max[i]]:
+            filtered_v_max[-1] = v_max[i]
     return filtered_v_max, filtered_v_min
+
+def get_baseline(v, v_min, v_max):
+    '''
+    v is entire array of data; v_max and v_min are list of indices of max peak and min peak respectively;
+    '''
+    baseline = []
+    k = min(len(v_min), len(v_max)) - 1
+    # Before first minimum, the baseline value is equal to the first minimum
+    for i in range(v_min[0]):
+        baseline.append(v[v_min[0]])
+    # For all the [minimum, maximum] value pair, the temporary baseline is considered to be the linear line between the ith minimum and (i+1)th minimum
+    # The actual baseline is the ratio of area under curve of the EDA data wrt to temporary baseline
+    # This sequence can be repeated n number of times to get accurate baseline
+    # Currently it is repeated 1 time only
+    for i in range(0, k):
+        diff_min_values = v[v_min[i+1]] - v[v_min[i]]
+        temp_baseline = [v[v_min[i]] + ((j - v_min[i])/((v_min[i+1] - v_min[i])))*(diff_min_values) for j in range(v_min[i], v_min[i+1] + 1)]
+        # total_area = integrate.simps([v[j+v_min[j]] - temp_baseline[j] for j in range(v_min[i], v_min[i+1] + 1)])
+        total_area = np.trapz(list(map(abs, [v[j] - temp_baseline[j-v_min[i]] for j in range(v_min[i], v_min[i+1] + 1)])))
+        curr_area = 0
+        for j in range(v_min[i], v_min[i+1]):
+            # baseline.append(temp_baseline[j-v_min[i]])
+            baseline.append(v[v_min[i]] + (curr_area/total_area)*(diff_min_values))
+            curr_area = curr_area + abs(np.trapz([v[j] - temp_baseline[j-v_min[i]], v[j+1] - temp_baseline[j+1-v_min[i]]]))
+        # print("for i =", i," curr_area =", curr_area, " and total_area =", total_area)
+
+    # For all the last [minimum, maximum] value pair, it is handled little differently, but with the same concept
+    temp_min_index, temp_min = min(enumerate(v[v_max[k]:]), key = operator.itemgetter(1))
+    temp_min_index = temp_min_index + v_max[k]
+    diff_min_values = temp_min - v[v_min[k]]
+    temp_baseline = [v[v_min[k]] + ((j - v_min[k])/((temp_min_index - v_min[k])))*(diff_min_values) for j in range(v_min[k], temp_min_index + 1)]
+    # total_area = integrate.simps([v[j+v_min[j]] - temp_baseline[j] for j in range(v_min[i], v_min[i+1] + 1)])
+    total_area = np.trapz(list(map(abs, [v[j] - temp_baseline[j-v_min[k]] for j in range(v_min[k], temp_min_index + 1)])))
+    curr_area = 0
+    for j in range(v_min[k], temp_min_index):
+        # baseline.append(temp_baseline[j-v_min[k]])
+        baseline.append(v[v_min[k]] + (curr_area/total_area)*(diff_min_values))
+        curr_area = curr_area + abs(np.trapz([v[j] - temp_baseline[j-v_min[k]], v[j+1] - temp_baseline[j+1-v_min[k]]]))
+    # print("for i =", k," curr_area =", curr_area, " and total_area =", total_area)
+    i = temp_min_index
+    while i < len(v):
+        baseline.append(temp_min)
+        i = i + 1
+    # print("len(v) == len(baseline):", len(v) == len(baseline))
+    return baseline
 
 def get_details_EDA(eda_y, eda_x, sampling_rate_eda, display_details=True, display_graph=False, graph_title="", store_graph=False, store_location=""):
     EDA = {"x" : eda_x, "y" : eda_y, "tonic" : [], "mean" : 0, "median" : 0, "stdev" : 0, "peak_count" : 0, "max_peak_indices" : [], "max_peak_position" : [], "max_peak_values" : [], "min_peak_indices" : [], "min_peak_position" : [], "min_peak_values" : [], "peak_values" : [], "area" : 0}
@@ -127,14 +174,15 @@ def get_details_EDA(eda_y, eda_x, sampling_rate_eda, display_details=True, displ
     EDA["peak_count"]    = min(len(EDA["max_peak_indices"]), len(EDA["min_peak_indices"]))
     EDA["max_peak_indices"] = EDA["max_peak_indices"][:EDA["peak_count"]]
     EDA["min_peak_indices"] = EDA["min_peak_indices"][:EDA["peak_count"]]
-    EDA["max_peak_indices"], EDA["min_peak_indices"] = filter_peaks(EDA["y"], EDA["max_peak_indices"], EDA["min_peak_indices"], threshold_slope=0.093, threshold_time=2, dx=1/sampling_rate_eda)
+    EDA["max_peak_indices"], EDA["min_peak_indices"] = filter_peaks(EDA["y"], EDA["min_peak_indices"], EDA["max_peak_indices"], threshold_slope=0.093, threshold_time=2, dx=1/sampling_rate_eda)
     EDA["peak_count"]    = min(len(EDA["max_peak_indices"]), len(EDA["min_peak_indices"]))
     EDA["max_peak_position"] = [EDA["x"][x] for x in EDA["max_peak_indices"]]
     EDA["min_peak_position"] = [EDA["x"][x] for x in EDA["min_peak_indices"]]
     EDA["max_peak_values"] = [EDA["y"][x] for x in EDA["max_peak_indices"]]
     EDA["min_peak_values"] = [EDA["y"][x] for x in EDA["min_peak_indices"]]
     EDA["peak_values"]   = [EDA["y"][EDA["max_peak_indices"][i]] - EDA["y"][EDA["min_peak_indices"][i]] for i in range(EDA["peak_count"])]
-    EDA["tonic"] = interpolate.InterpolatedUnivariateSpline(EDA["min_peak_position"], EDA["min_peak_values"])(EDA["x"]) if EDA["peak_count"] > 3 else EDA["y"]
+    # EDA["tonic"] = interpolate.InterpolatedUnivariateSpline(EDA["min_peak_position"], EDA["min_peak_values"])(EDA["x"]) if EDA["peak_count"] > 3 else EDA["y"]
+    EDA["tonic"] = get_baseline(EDA["y"], EDA["min_peak_indices"], EDA["max_peak_indices"])
     for i in range(EDA["peak_count"]):
         temp_y = [EDA["y"][x] - EDA["y"][EDA["min_peak_indices"][i]] for x in range(EDA["min_peak_indices"][i], EDA["max_peak_indices"][i] + 1)]
         EDA["area"] = EDA["area"] + 2*integrate.simps(temp_y, dx=1/sampling_rate_eda)
@@ -584,6 +632,7 @@ if os.path.exists(filepath):
             print("Overall Data(for questions):")
             # print("")
             EDA_questions = get_details_EDA(eda_y[int(math.floor(question_range[0]*sampling_rate_EDA)):int(math.floor(question_range[1]*sampling_rate_EDA+1))], eda_x[int(math.floor(question_range[0]*sampling_rate_EDA)):int(math.floor(question_range[1]*sampling_rate_EDA+1))], sampling_rate_EDA, display_details=True, display_graph=True, graph_title="Overall Data EDA(questions)", store_graph=False, store_location=storage_location_EDA + filename + "_EDA(questions).png")
+            # sys.exit()
             print("")
             print("Overall Data(for drawing):")
             # print("")
@@ -595,7 +644,7 @@ if os.path.exists(filepath):
             # print("")
             EDA = get_details_EDA(eda_y, eda_x, sampling_rate_EDA, display_details=True, display_graph=True, graph_title="Overall Data EDA(questions)", store_graph=False, store_location=storage_location_EDA + filename + "_EDA(questions).png")
             print("")
-        sys.exit()
+        # sys.exit()
 
         # Overall compressed data
         # eda_x = compress_data(eda_x, compression_factor_EDA)
