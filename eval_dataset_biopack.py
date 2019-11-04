@@ -114,6 +114,8 @@ def get_baseline(v, v_min, v_max):
     '''
     v is entire array of data; v_max and v_min are list of indices of max peak and min peak respectively;
     '''
+    if(len(v_min) == 0 or len(v_max) == 0):
+        return v
     baseline = []
     k = min(len(v_min), len(v_max)) - 1
     # Before first minimum, the baseline value is equal to the first minimum
@@ -490,9 +492,9 @@ if os.path.exists(filepath):
         # Overall Data
         print("Overall Data:")
         # print("")
-        EDA = get_details_EDA(eda_y, eda_x, sampling_rate_EDA, display_details=True, display_graph=False, graph_title="Overall Data EDA", store_graph=False, store_location=storage_location_EDA + filename + "_EDA(overall).png")
+        EDA = get_details_EDA(eda_y, eda_x, sampling_rate_EDA, display_details=True, display_graph=True, graph_title="Overall Data EDA", store_graph=False, store_location=storage_location_EDA + filename + "_EDA(overall).png")
         print("")
-        # sys.exit()
+        sys.exit()
 
         # Overall compressed data
         # eda_x = compress_data(eda_x, compression_factor_EDA)
@@ -549,7 +551,7 @@ if os.path.exists(filepath):
         # Overall Data
         print("Overall Data:")
         # print("")
-        PPG = get_details_PPG(ppg_y, ppg_x, sampling_rate_PPG, display_details=True, display_graph=False, graph_title="Overall Data PPG", store_graph=False, store_location=storage_location_PPG + filename + "_PPG(overall).png")
+        PPG = get_details_PPG(ppg_y, ppg_x, sampling_rate_PPG, display_details=True, display_graph=True, graph_title="Overall Data PPG", store_graph=False, store_location=storage_location_PPG + filename + "_PPG(overall).png")
         print("")
         # Plotting and saving overall spectral power data
         # plt.plot(PPG["power_spectrum"]["freq"], PPG["power_spectrum"]["density"], c='r')
@@ -632,7 +634,7 @@ if os.path.exists(filepath):
             print("Overall Data(for questions):")
             # print("")
             EDA_questions = get_details_EDA(eda_y[int(math.floor(question_range[0]*sampling_rate_EDA)):int(math.floor(question_range[1]*sampling_rate_EDA+1))], eda_x[int(math.floor(question_range[0]*sampling_rate_EDA)):int(math.floor(question_range[1]*sampling_rate_EDA+1))], sampling_rate_EDA, display_details=True, display_graph=True, graph_title="Overall Data EDA(questions)", store_graph=False, store_location=storage_location_EDA + filename + "_EDA(questions).png")
-            # sys.exit()
+            sys.exit()
             print("")
             print("Overall Data(for drawing):")
             # print("")
@@ -644,7 +646,7 @@ if os.path.exists(filepath):
             # print("")
             EDA = get_details_EDA(eda_y, eda_x, sampling_rate_EDA, display_details=True, display_graph=True, graph_title="Overall Data EDA(questions)", store_graph=False, store_location=storage_location_EDA + filename + "_EDA(questions).png")
             print("")
-        # sys.exit()
+        sys.exit()
 
         # Overall compressed data
         # eda_x = compress_data(eda_x, compression_factor_EDA)
